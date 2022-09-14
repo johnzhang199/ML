@@ -1,0 +1,9 @@
+matplotlib==3.1.1
+tqdm==4.61.1
+lightgbm==3.2.1
+pandas==1.2.5
+numpy==1.20.3
+# (3. https://github.com/pytorch/pytorch/issues/47354)
+#torch==1.7.1+cu110
+pyarrow
+lightgbm
