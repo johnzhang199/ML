@@ -12,14 +12,14 @@ from sklearn.preprocessing import LabelEncoder
 from utils import *
 root = args.root
 seed = args.seed
-_DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+_DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
 
 _LEN = 10000
 
-train = pd.read_feather(_DIR + 'train.feather')
+train = pd.read_feather(_DIR_DATA + 'train.feather')
 
 
-test = pd.read_feather(_DIR + 'test.feather')
+test = pd.read_feather(_DIR_DATA + 'test.feather')
 
 def one_hot_encoding(df,cols,is_drop=True):
     for col in cols:

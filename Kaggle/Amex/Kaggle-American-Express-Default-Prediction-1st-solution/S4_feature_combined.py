@@ -7,7 +7,7 @@ from tqdm import tqdm
 from utils import *
 
 root = args.root
-_DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+_DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
 
 oof = pd.read_csv('./output/LGB_with_series_feature/oof.csv')
 sub = pd.read_csv('./output/LGB_with_series_feature/submission.csv.zip')
@@ -54,7 +54,7 @@ def one_hot_encoding(df,cols,is_drop=True):
 
 cat_features = ["B_30","B_38","D_114","D_116","D_117","D_120","D_126","D_63","D_64","D_66","D_68"]
 
-df = pd.read_feather(_DIR + 'train.feather').append(pd.read_feather(_DIR + 'test.feather')).reset_index(drop=True)
+df = pd.read_feather(_DIR_DATA + 'train.feather').append(pd.read_feather(_DIR_DATA + 'test.feather')).reset_index(drop=True)
 df = df.drop(['S_2'],axis=1)
 df = one_hot_encoding(df,cat_features,True)
 for col in tqdm(df.columns):
@@ -62,7 +62,7 @@ for col in tqdm(df.columns):
         df[col] /= 100
     df[col] = df[col].fillna(0)
 
-df.to_feather(_DIR + 'nn_series.feather')
+df.to_feather(_DIR_DATA + 'nn_series.feather')
 
 def GreedyFindBin(distinct_values, counts,num_distinct_values, max_bin, total_cnt, min_data_in_bin=3):
 #INPUT:
@@ -172,4 +172,4 @@ tmp = tmp.fillna(0)
 dfs.append(tmp)
 df = pd.concat(dfs,axis=1)
 
-df.to_feather(_DIR + 'nn_all_feature.feather')
+df.to_feather(_DIR_DATA + 'nn_all_feature.feather')

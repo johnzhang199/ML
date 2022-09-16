@@ -14,7 +14,7 @@ from model import *
 root = args.root
 seed = args.seed
 
-_DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+_DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
 
 df = pd.read_feather(f'{root}/all_feature.feather')
 

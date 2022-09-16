@@ -16,10 +16,10 @@ import argparse
 
 def train():
 
-    _DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+    _DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
     if False:
         parser = argparse.ArgumentParser()
-        parser.add_argument("--root", type=str, default=_DIR + '')
+        parser.add_argument("--root", type=str, default=_DIR_DATA + '')
         parser.add_argument("--save_dir", type=str, default='tmp')
         parser.add_argument("--use_apm", action='store_true', default=False)
         parser.add_argument("--num_workers", type=int, default=16)
@@ -38,8 +38,8 @@ def train():
 
     x = datetime.datetime.now()
     print('start: ', x)
-    df =  pd.read_feather(_DIR + 'nn_series.feather')
-    y = pd.read_csv(_DIR + 'train_labels.csv')
+    df =  pd.read_feather(_DIR_DATA + 'nn_series.feather')
+    y = pd.read_csv(_DIR_DATA + 'train_labels.csv')
 
 #todo: change this to use train_feather count
     if False:
@@ -49,7 +49,7 @@ def train():
     y = y.merge(df_uid, left_on='customer_ID', right_index=True).drop(columns='index')
 
 
-    f = pd.read_feather(_DIR + 'nn_all_feature.feather')
+    f = pd.read_feather(_DIR_DATA + 'nn_all_feature.feather')
     df['idx'] = df.index
     series_idx = df.groupby('customer_ID',sort=False).idx.agg(['min','max'])
     series_idx['feature_idx'] = np.arange(len(series_idx))

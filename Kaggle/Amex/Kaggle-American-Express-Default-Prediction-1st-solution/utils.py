@@ -20,10 +20,10 @@ from scheduler import *
 
 import argparse
 if True:
-    _DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+    _DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=str, default=_DIR + '')
+    parser.add_argument("--root", type=str, default=_DIR_DATA + '')
     parser.add_argument("--save_dir", type=str, default='tmp')
     parser.add_argument("--use_apm", action='store_true', default=False)
     parser.add_argument("--num_workers", type=int, default=16)
@@ -269,10 +269,10 @@ def NN_train_and_predict(train, test, model_class, config, use_series_oof, logit
     if False:
         id_name = 'customer_ID'
         label_name = 'target'
-        _DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+        _DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("--root", type=str, default=_DIR + '')
+        parser.add_argument("--root", type=str, default=_DIR_DATA + '')
         parser.add_argument("--save_dir", type=str, default='tmp')
         parser.add_argument("--use_apm", action='store_true', default=False)
         parser.add_argument("--num_workers", type=int, default=16)

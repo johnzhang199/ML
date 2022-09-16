@@ -8,7 +8,7 @@ import gc,os,random
 import time,datetime
 from tqdm import tqdm
 from multiprocessing import Pool as ThreadPool
-_DIR = r'C:\John\git\vas\kaggle\americanExpress/'
+_DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
 
 
 def one_hot_encoding(df,cols,is_drop=True):
@@ -88,16 +88,16 @@ for li, lastk in enumerate([None,3,6]):
         if sampling:
             for f in ['train_orig.feather', 'test_orig.feather']:
 
-                df_orig = pd.read_feather(_DIR + f)
+                df_orig = pd.read_feather(_DIR_DATA + f)
                 customer_ID_samples = df_orig.groupby('customer_ID').count()['S_2'].to_frame().sample(n=_LEN)
                 df_orig = df_orig.merge(customer_ID_samples, left_on='customer_ID', right_index=True, suffixes=('', '_y')).drop('S_2_y',axis=1)
-                df_orig.reset_index().to_feather(_DIR + f.replace('_orig', ''))
+                df_orig.reset_index().to_feather(_DIR_DATA + f.replace('_orig', ''))
             sampling = False
 
 
         # df = df_orig.copy()
 
-        df = pd.read_feather(_DIR + 'train_sample.feather').append(pd.read_feather(_DIR + 'test_sample.feather')).reset_index(drop=True)
+        df = pd.read_feather(_DIR_DATA + 'train_sample.feather').append(pd.read_feather(_DIR_DATA + 'test_sample.feather')).reset_index(drop=True)
         all_cols = [c for c in list(df.columns) if c not in ['customer_ID','S_2']]
         cat_features = ["B_30","B_38","D_114","D_116","D_117","D_120","D_126","D_63","D_64","D_66","D_68"]
         num_features = [col for col in all_cols if col not in cat_features]
@@ -147,19 +147,19 @@ for li, lastk in enumerate([None,3,6]):
                 cat_feature_df = pd.concat(pool.map(cat_feature,tqdm(dfs,desc='cat_feature'))).reset_index(drop=True)
             cat_feature_df = cat_feature(df).reset_index(drop=True)
 
-            cat_feature_df.to_feather(_DIR + f'{prefix}cat_feature.feather')
+            cat_feature_df.to_feather(_DIR_DATA + f'{prefix}cat_feature.feather')
 
         if prefix in ['','last3_','last6_','rank_','ym_rank_']:
             if False:
                 num_feature_df = pd.concat(pool.map(num_feature,tqdm(dfs,desc='num_feature'))).reset_index(drop=True)
             num_feature_df = num_feature(df).reset_index(drop=True)
-            num_feature_df.to_feather(_DIR + f'{prefix}num_feature.feather')
+            num_feature_df.to_feather(_DIR_DATA + f'{prefix}num_feature.feather')
 
         if prefix in ['','last3_']:
             if False:
                 diff_feature_df = pd.concat(pool.map(diff_feature,tqdm(dfs,desc='diff_feature'))).reset_index(drop=True)
             diff_feature_df = diff_feature(df).reset_index(drop=True)
-            diff_feature_df.to_feather(_DIR + f'{prefix}diff_feature.feather')
+            diff_feature_df.to_feather(_DIR_DATA + f'{prefix}diff_feature.feather')
 
         #for debugging turn of parallel
         if False:
