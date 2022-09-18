@@ -8,7 +8,8 @@ import gc,os,random
 import time,datetime
 from tqdm import tqdm
 from multiprocessing import Pool as ThreadPool
-_DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
+
+_DIR_DATA = r'C:\John\git\ML\Kaggle\Amex\mine/'
 
 
 def one_hot_encoding(df,cols,is_drop=True):
@@ -97,7 +98,7 @@ for li, lastk in enumerate([None,3,6]):
 
         # df = df_orig.copy()
 
-        df = pd.read_feather(_DIR_DATA + 'train_sample.feather').append(pd.read_feather(_DIR_DATA + 'test_sample.feather')).reset_index(drop=True)
+        df = pd.read_feather(_DIR_DATA + 'train_down_sampling_10000.feather').append(pd.read_feather(_DIR_DATA + 'test_down_sampling_from_train_10000.feather')).reset_index(drop=True)
         all_cols = [c for c in list(df.columns) if c not in ['customer_ID','S_2']]
         cat_features = ["B_30","B_38","D_114","D_116","D_117","D_120","D_126","D_63","D_64","D_66","D_68"]
         num_features = [col for col in all_cols if col not in cat_features]

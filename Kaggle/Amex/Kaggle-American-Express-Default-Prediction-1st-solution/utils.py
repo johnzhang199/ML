@@ -266,7 +266,7 @@ class TaskDataset:
 
 
 def NN_train_and_predict(train, test, model_class, config, use_series_oof, logit=False, output_root='./output/', run_id=None):
-    if False:
+    if True:
         id_name = 'customer_ID'
         label_name = 'target'
         _DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
@@ -283,6 +283,9 @@ def NN_train_and_predict(train, test, model_class, config, use_series_oof, logit
 
         args, unknown = parser.parse_known_args()
         gpus = list(range(torch.cuda.device_count()))
+
+        args.num_workers = 1
+        args.do_train = True
 
     if not run_id:
         run_id = 'run_nn_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')

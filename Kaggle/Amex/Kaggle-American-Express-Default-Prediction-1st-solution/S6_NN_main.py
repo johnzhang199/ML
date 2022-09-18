@@ -16,8 +16,8 @@ import argparse
 
 def train():
 
-    _DIR_DATA = r'C:\John\git\vas\kaggle\americanExpress/'
-    if False:
+    _DIR_DATA = r'C:\John\git\ML\Kaggle\Amex\mine/'
+    if True:
         parser = argparse.ArgumentParser()
         parser.add_argument("--root", type=str, default=_DIR_DATA + '')
         parser.add_argument("--save_dir", type=str, default='tmp')
@@ -70,11 +70,11 @@ def train():
         'seed': seed,
         'remark': args.remark
     }
-    if False:
+    if True:
         args.do_train=True
         args.batch_size=512
     #https://github.com/pytorch/pytorch/issues/2341
-        args.num_workers=4
+    args.num_workers=1
     if True:
         NN_train_and_predict([df,f,y,series_idx.values[:y.shape[0]]],[df,f,series_idx.values[y.shape[0]:]],Amodel,nn_config,use_series_oof=False,run_id='NN_with_series')
 
