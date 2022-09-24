@@ -13,6 +13,8 @@ import torch.cuda.amp as amp
 import torch.nn as nn
 import torch
 import argparse
+from os import remove
+from shutil import move
 
 from utils import TaskDataset
 from scheduler import Adam12
@@ -29,7 +31,7 @@ class model_amex:
         # self.SIZE_TEST = 10000
         # self.SIZE_TRAIN = 1000000000
         # self.SIZE_TEST = 500000
-        self.TOTAL_SAMPLING_PCNT = 0.5
+        self.TOTAL_SAMPLING_PCNT = 0.02
         self.TEST_PCNT = 0.1
 
         # folder where data are located such as train and test data
@@ -83,8 +85,7 @@ class model_amex:
         if self.USE_TEST_DATA:
             return self._DIR_DATA + '/' + self._FILE_TEST_FEATHER_ORIG
         else:
-            return self._DIR_DATA_DOWN_SAMPLED + '/' + 'test_down_sampling_from_train_' + str(
-                self.SIZE_TEST) + '.feather'
+            return self._DIR_DATA_DOWN_SAMPLED + '/' + 'test_down_sampling_from_train_' + str(self.TOTAL_SAMPLING_PCNT) + '_' + str(self.TEST_PCNT) + '.feather'
 
     if False:
         # not used
@@ -156,19 +157,24 @@ class model_amex:
             df_orig = pd.read_feather(self._DIR_DATA + self._FILE_TRAIN_FEATHER_ORIG)
             customer_ID_samples = df_orig.groupby(self.COL_UID).count()[self.COL_TIME].to_frame()
             _len = len(customer_ID_samples)
-            #rescale self.SIZE_TRAIN + self.SIZE_TEST
+            # rescale self.SIZE_TRAIN + self.SIZE_TEST
             # if _len < self.SIZE_TRAIN + self.SIZE_TEST:
             # self.SIZE_TRAIN, self.SIZE_TEST = int(self.SIZE_TRAIN * _len / (self.SIZE_TRAIN + self.SIZE_TEST)), int(self.SIZE_TEST * _len / (self.SIZE_TRAIN + self.SIZE_TEST))
             customer_ID_samples = customer_ID_samples.sample(
-            frac=self.TOTAL_SAMPLING_PCNT)
-
-            df_orig = df_orig.merge(customer_ID_samples, left_on=self.COL_UID, right_index=True,
-                                    suffixes=('', '_y')).drop(
+                frac=self.TOTAL_SAMPLING_PCNT)
+            msk = np.random.rand(len(customer_ID_samples)) < (1 - self.TEST_PCNT)
+            customer_ID_samples_train = customer_ID_samples[msk]
+            customer_ID_samples_test = customer_ID_samples[~msk]
+            train = df_orig.merge(customer_ID_samples_train, left_on=self.COL_UID, right_index=True,
+                                  suffixes=('', '_y')).drop(
                 self.COL_TIME + '_y', axis=1)
-            msk = np.random.rand(len(df_orig)) < (1-self.TEST_PCNT)
-            train = df_orig[msk]
+
             train.reset_index().to_feather(self.get_path_train())
-            test = df_orig[~msk]
+
+            test = df_orig.merge(customer_ID_samples_test, left_on=self.COL_UID, right_index=True,
+                                 suffixes=('', '_y')).drop(
+                self.COL_TIME + '_y', axis=1)
+
             test.reset_index().to_feather(self.get_path_test())
 
     def cat_feature(self, df, lastk):
@@ -237,6 +243,9 @@ class model_amex:
 
         df = num_agg_df.reset_index()
         print('diff feature shape after engineering', df.shape)
+
+        #diff_D_108_std at 2% sampling all NaN, leading to NN failing. just fill with 0 if all NaN
+        df[df.columns[df.isnull().sum() == len(df)]]=0
 
         return df
 
@@ -458,7 +467,9 @@ class model_amex:
             oof.to_csv(output_path + '/oof.csv', index=False)
 
             log.close()
-            os.rename(output_path + '/train.log', output_path + '/train_%.6f.log' % mean_valid_metric)
+            if os.path.exists(output_path + '/train_%.6f.log' % mean_valid_metric):
+                remove(output_path + '/train_%.6f.log' % mean_valid_metric)
+            move(output_path + '/train.log', output_path + '/train_%.6f.log' % mean_valid_metric)
 
             log_df = pd.DataFrame({'run_id': [run_id], 'mean metric': [round(mean_valid_metric, 6)],
                                    'global metric': [round(global_valid_metric, 6)], 'remark': [self.args.remark]})
@@ -685,10 +696,11 @@ class model_amex:
                     # v_max = df[col].max()
                     # df[col] = (df[col]-v_min+eps) / (v_max-v_min+eps)
                     vc = df[col].value_counts().sort_index()
-                    bins = self.GreedyFindBin(vc.index.values, vc.values, len(vc), 255, vc.sum())
-                    df[col] = np.digitize(df[col], [-np.inf] + bins)
-                    df.loc[df[col] == len(bins) + 1, col] = 0
-                    df[col] = df[col] / df[col].max()
+                    if True or len(vc) > 0:
+                        bins = self.GreedyFindBin(vc.index.values, vc.values, len(vc), 255, vc.sum())
+                        df[col] = np.digitize(df[col], [-np.inf] + bins)
+                        df.loc[df[col] == len(bins) + 1, col] = 0
+                        df[col] = df[col] / df[col].max()
 
         tmp = tmp.fillna(0)
         dfs.append(tmp)
@@ -844,7 +856,7 @@ class model_amex:
 
                 model = model_class(223, (6375 + 13) * 2, 1, 3, 128, use_series_oof=use_series_oof)
                 if run_id == 'NN_with_series_and_all_feature':
-                    model = model_class(223, 12820, 1, 3, 128, use_series_oof=use_series_oof)
+                    model = model_class(223, (len(train_feature.columns)-1)*2, 1, 3, 128, use_series_oof=use_series_oof)
 
                 scheduler = Adam12()
 
@@ -962,7 +974,7 @@ class model_amex:
 
                 model = model_class(223, (6375 + 13) * 2, 1, 3, 128, use_series_oof=use_series_oof)
                 if run_id == 'NN_with_series_and_all_feature':
-                    model = model_class(223, 12820, 1, 3, 128, use_series_oof=use_series_oof)
+                    model = model_class(223, (len(train_feature.columns)-1)*2, 1, 3, 128, use_series_oof=use_series_oof)
                 if self.use_cuda():
                     model.cuda()
                 model.load_state_dict(state_dict)
@@ -1009,7 +1021,11 @@ class model_amex:
 
             if test is None:
                 log.close()
-                os.rename(output_path + 'train.log', output_path + 'train_%.6f.log' % mean_valid_metric)
+                # os.rename(output_path + 'train.log', output_path + 'train_%.6f.log' % mean_valid_metric)
+                if os.path.exists(output_path + '/train_%.6f.log' % mean_valid_metric):
+                    remove(output_path + '/train_%.6f.log' % mean_valid_metric)
+                move(output_path + '/train.log', output_path + '/train_%.6f.log' % mean_valid_metric)
+
 
             log_df = pd.DataFrame(
                 {'run_id': [run_id], 'folds': folds, 'metric': [round(mean_valid_metric, 6)], 'lb': [np.nan],
@@ -1030,14 +1046,14 @@ class model_amex:
 
             test_dataset = TaskDataset(test_series, test_feature, test_series_idx)
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False,
-                                         collate_fn=test_dataset.collate_fn, num_workers=args.num_workers)
+                                         collate_fn=test_dataset.collate_fn, num_workers=self.args.num_workers)
             models = []
             for fold in range(folds):
                 if not os.path.exists(output_path + 'fold%s.ckpt' % fold):
                     continue
                 model = model_class(223, (6375 + 13) * 2, 1, 3, 128, use_series_oof=use_series_oof)
                 if run_id == 'NN_with_series_and_all_feature':
-                    model = model_class(223, 12820, 1, 3, 128, use_series_oof=use_series_oof)
+                    model = model_class(223, (len(train_feature.columns)-1)*2, 1, 3, 128, use_series_oof=use_series_oof)
                 if self.use_cuda():
                     model.cuda()
                     state_dict = torch.load(output_path + 'fold%s.ckpt' % fold, torch.device('cuda'))
@@ -1083,18 +1099,18 @@ class model_amex:
             os.rename(output_path, output_root + run_id + '/')
         return oof, sub
 
-    def S6_NN_main(self):
+    def S6_NN_main(self, first_train ):
         x = datetime.datetime.now()
         print('start: ', x)
         df = pd.read_feather(self._DIR_DATA + 'nn_series.feather')
         y = pd.read_csv(self._DIR_DATA_INPUT + 'train_labels.csv')
 
         # todo: change this to use train_feather count
-        if False:
-            train_feather = pd.read_feather(f'{self._DIR_DATA}/train.feather')
+        if True:
+            train_feather = pd.read_feather(self.get_path_train())
             train_feather = train_feather.groupby('customer_ID').count()['S_2']
-        df_uid = df.groupby(self.COL_UID).count()['index']
-        y = y.merge(df_uid, left_on=self.COL_UID, right_index=True).drop(columns='index')
+        # df_uid = df.groupby(self.COL_UID).count()['index']
+        y = y.merge(train_feather, left_on=self.COL_UID, right_index=True).drop(columns='S_2')
 
         f = pd.read_feather(self._DIR_DATA + 'nn_all_feature.feather')
         df['idx'] = df.index
@@ -1102,6 +1118,13 @@ class model_amex:
         series_idx['feature_idx'] = np.arange(len(series_idx))
         df = df.drop(['idx'], axis=1)
         print(f.head())
+        if True:
+            self.args.do_train = True
+            self.args.batch_size = 512
+            # https://github.com/pytorch/pytorch/issues/2341
+            self.args.num_workers = 1
+            #set folds to 5 when running real runs, orig setting
+            folds = 2
         nn_config = {
             'id_name': self.COL_UID,
             'feature_name': [],
@@ -1113,20 +1136,16 @@ class model_amex:
             'patience': 100,
             'lr': 3e-4,
             'batch_size': 256,
-            'folds': 5,
+            'folds': folds,
             'seed': self.args.seed,
             'remark': self.args.remark
         }
-        if True:
-            self.args.do_train = True
-            self.args.batch_size = 512
-            # https://github.com/pytorch/pytorch/issues/2341
-            self.args.num_workers = 1
-        if True:
+        if first_train:
             self.NN_train_and_predict([df, f, y, series_idx.values[:y.shape[0]]],
                                       [df, f, series_idx.values[y.shape[0]:]],
                                       Amodel, nn_config, use_series_oof=False, run_id='NN_with_series')
 
+        # torch.backends.cudnn.enabled = False
         self.NN_train_and_predict([df, f, y, series_idx.values[:y.shape[0]]], [df, f, series_idx.values[y.shape[0]:]],
                                   Amodel, nn_config, use_series_oof=True, run_id='NN_with_series_and_all_feature')
         x = datetime.datetime.now()
@@ -1136,12 +1155,16 @@ if __name__ == '__main__':
     model = model_amex()
     if False:
         model.S1_denoise()
-    if True:
+    if False:
         model.S1pnt1_down_sample()
+
     if False:
         model.S2_manial_feature()
+    if False:
         model.S3_series_feature()
         model.S4_feature_combined()
+    if False:
         model.S5_LGB_main()
-        model.S6_NN_main()
+    if True:
+        model.S6_NN_main(first_train =False)
         model.compute_score()

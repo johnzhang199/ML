@@ -219,7 +219,13 @@ class TaskDataset:
     def __getitem__(self, index):
         i1,i2,idx = self.uidxs[index]
         #change from 1 to 2 to get rid of customer_ID column
-        series = self.df_series.iloc[i1:i2+1,2:].values
+        #drop index and cumstomer_ID column
+        series_df = self.df_series.iloc[i1:i2+1,:]
+        cols_to_drop = ['index', 'customer_ID']
+        for c in cols_to_drop:
+            if c in series_df:
+                series_df = series_df.drop(columns=[c])
+        series = series_df.values
 
         if len(series.shape) == 1:
             series = series.reshape((-1,)+series.shape[-1:])
