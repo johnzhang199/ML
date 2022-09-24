@@ -539,10 +539,14 @@ class model_amex:
         train_y_orig = pd.read_csv(self._DIR_DATA + self._FILE_TRAIN_LABEL)
         # merged = False
         for run_id in ['LGB_with_series_feature', 'LGB_with_manual_feature', 'LGB_with_manual_feature_and_series_oof',
-                       'NN_with_series', 'NN_with_series_and_all_feature']:
+                       'NN_with_series', 'NN_with_series_and_all_feature','']:
             # LGB_with_series_feature
-            _dir = self._DIR_OUTPUT + run_id + '/'
-            submission = pd.read_csv(_dir + 'submission.csv.zip')
+            if len(run_id) > 0:
+                _dir = self._DIR_OUTPUT + run_id + '/'
+                submission = pd.read_csv(_dir + 'submission.csv.zip')
+            else:
+                _dir = self._DIR_OUTPUT
+                submission = pd.read_csv(_dir + 'final_submission.csv.zip')
             submission.to_csv(_dir + 'submission.csv', index=False)
             submission = submission.groupby(self.COL_UID).mean()['prediction'].reset_index()
             train_y = train_y_orig.merge(submission, on=self.COL_UID)
@@ -1150,6 +1154,16 @@ class model_amex:
                                   Amodel, nn_config, use_series_oof=True, run_id='NN_with_series_and_all_feature')
         x = datetime.datetime.now()
         print('end: ', x)
+    def S7_ensemble(self):
+        p0 = pd.read_csv('./output/LGB_with_manual_feature/submission.csv.zip')
+        p1 = pd.read_csv('./output/LGB_with_manual_feature_and_series_oof/submission.csv.zip')
+        p2 = pd.read_csv('./output/NN_with_series/submission.csv.zip')
+        p3 = pd.read_csv('./output/NN_with_series_and_all_feature/submission.csv.zip')
+
+        p0['prediction'] = p0['prediction'] * 0.3 + p1['prediction'] * 0.35 + p2['prediction'] * 0.15 + p3[
+            'prediction'] * 0.1
+
+        p0.to_csv('./output/final_submission.csv.zip', index=False, compression='zip')
 if __name__ == '__main__':
 
     model = model_amex()
@@ -1165,6 +1179,7 @@ if __name__ == '__main__':
         model.S4_feature_combined()
     if False:
         model.S5_LGB_main()
+        model.S6_NN_main(first_train=False)
     if True:
-        model.S6_NN_main(first_train =False)
+        model.S7_ensemble()
         model.compute_score()
