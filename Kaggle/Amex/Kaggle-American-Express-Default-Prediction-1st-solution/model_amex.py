@@ -1004,7 +1004,8 @@ class model_amex:
                             outputs = model(data)
                             # feature,outputs = model(data)
                     valid_preds.append(outputs.detach().cpu().numpy())
-                    valid_Y.append(y.detach().cpu().numpy())
+                    if False:
+                        valid_Y.append(y.detach().cpu().numpy())
 
                 valid_preds = np.concatenate(valid_preds).reshape(-1)
                 valid_Y = train_y.iloc[val_index][self.COL_LABEL].values  # oof train
@@ -1126,7 +1127,7 @@ class model_amex:
             self.args.do_train = True
             self.args.batch_size = 512
             # https://github.com/pytorch/pytorch/issues/2341
-            self.args.num_workers = 1
+            self.args.num_workers = 0
             #set folds to 5 when running real runs, orig setting
             folds = 2
         nn_config = {
@@ -1174,12 +1175,12 @@ if __name__ == '__main__':
 
     if False:
         model.S2_manial_feature()
-    if False:
         model.S3_series_feature()
-        model.S4_feature_combined()
+    if False:
+         model.S4_feature_combined()
     if False:
         model.S5_LGB_main()
-        model.S6_NN_main(first_train=False)
     if True:
+        model.S6_NN_main(first_train=True)
         model.S7_ensemble()
         model.compute_score()
