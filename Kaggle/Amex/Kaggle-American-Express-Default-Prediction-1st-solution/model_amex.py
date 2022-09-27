@@ -31,12 +31,15 @@ class model_amex:
         # self.SIZE_TEST = 10000
         # self.SIZE_TRAIN = 1000000000
         # self.SIZE_TEST = 500000
-        self.TOTAL_SAMPLING_PCNT = 0.02
+        self.TOTAL_SAMPLING_PCNT = 1
         self.TEST_PCNT = 0.1
 
         # folder where data are located such as train and test data
         self._DIR_DATA = self._DIR_DATA_DOWN_SAMPLED = r'../mine/'
         self._DIR_DATA_INPUT = r'../mine/'
+        self._DIR_DATA_OUTPUT = r'../mine/downsampled' + str(self.TOTAL_SAMPLING_PCNT) + '_' + str(self.TEST_PCNT) + '/'
+        if not os.path.exists(self._DIR_DATA_OUTPUT):
+            os.makedirs(self._DIR_DATA_OUTPUT)
         # self._DIR_DATA_INPUT = r'/kaggle/input/amex-default-prediction/'
         # self._DIR_DATA = r'/kaggle/working/'
 
@@ -58,6 +61,10 @@ class model_amex:
         self.COL_LABEL = 'target'
 
         self.seed = 42
+
+        self.USE_FEATHER = True
+        self.USE_PARALLEL = True
+        self.regenerate_feather = False
         parser = argparse.ArgumentParser()
         parser.add_argument("--root", type=str, default=self._DIR_DATA_INPUT + '')
         parser.add_argument("--save_dir", type=str, default='tmp')
@@ -69,6 +76,18 @@ class model_amex:
         parser.add_argument("--remark", type=str, default='')
 
         self.args, unknown = parser.parse_known_args()
+
+    if False:
+        def read_csv_or_feather(self, file):
+            if self.USE_FEATHER:
+                if not file.lower().endswith('.feather'):
+                    file += '.feather'
+            else:
+                if not file.lower().endswith('.csv'):
+                    file += '.csv'
+
+
+
 
     def get_path_train_orig(self):
         return self._DIR_DATA_INPUT + '/' + self._FILE_TRAIN
@@ -249,11 +268,49 @@ class model_amex:
 
         return df
 
+    def append_cols(self, df, file):
+
+        if not os.path.exists(file):
+            df.to_csv(file, index=False)
+        else:
+            chunksize = 10 ** 6
+            FIRST_TIME = True
+            file_tmp = file.replace('.csv', '_tmp.csv')
+            #load the existing files in batch and then save it to a diff_file
+            for chunk in pd.read_csv(file, chunksize=chunksize):
+                chunk = pd.read_csv(file)
+                chunk.merge(df, on = [self.COL_UID, self.COL_TIME])
+                if FIRST_TIME:
+                    chunk.to_csv(file_tmp, index=False)
+                    FIRST_TIME = False
+                else:
+                    chunk.to_csv(file_tmp, index=False, mode='a')
+            #delete file and then move file_tmp to it
+            os.remove(file)
+            move(file_tmp, file)
+
+
+            #replace the existing file
+
+
     def S2_manial_feature(self):
         n_cpu = 16
         transform = [['', 'rank_', 'ym_rank_'], [''], ['']]
         if False:
             len(df_train)
+
+        # we need to process columns in batch so that we do not run out of memory
+        # first let's delete the old files if they exists
+        if not self.USE_FEATHER:
+            for li, lastk in enumerate([None, 3, 6]):
+                for prefix in transform[li]:
+                    files = [self._DIR_DATA_OUTPUT + f'{prefix}cat_feature.csv',
+                             self._DIR_DATA_OUTPUT + f'{prefix}num_feature.csv',
+                             self._DIR_DATA_OUTPUT + f'{prefix}diff_feature.csv']
+                    for f in files:
+                        if os.path.exists(f):
+                            os.remove(f)
+
         for li, lastk in enumerate([None, 3, 6]):
             for prefix in transform[li]:
 
@@ -307,33 +364,44 @@ class model_amex:
                     start = vc_[-1]
 
                 # for debugging turn of parallel
-                if False:
+                if self.USE_PARALLEL:
                     pool = ThreadPool(n_cpu)
 
-                if prefix in ['', 'last3_']:
-                    if False:
+                if prefix in ['', 'last3_'] and (self.regenerate_feather or not os.path.exists(self._DIR_DATA_OUTPUT + f'{prefix}cat_feature.feather')):
+                    if self.USE_PARALLEL:
                         cat_feature_df = pd.concat(pool.map(cat_feature, tqdm(dfs, desc='cat_feature'))).reset_index(
                             drop=True)
-                    cat_feature_df = self.cat_feature(df, lastk).reset_index(drop=True)
+                    else:
+                        cat_feature_df = self.cat_feature(df, lastk).reset_index(drop=True)
+                    if self.USE_FEATHER:
+                        cat_feature_df.to_feather(self._DIR_DATA_OUTPUT + f'{prefix}cat_feature.feather')
+                    else:
+                        self.append_cols(cat_feature_df, self._DIR_DATA_OUTPUT + f'{prefix}cat_feature.csv')
 
-                    cat_feature_df.to_feather(self._DIR_DATA + f'{prefix}cat_feature.feather')
-
-                if prefix in ['', 'last3_', 'last6_', 'rank_', 'ym_rank_']:
-                    if False:
+                if prefix in ['', 'last3_', 'last6_', 'rank_', 'ym_rank_'] and (self.regenerate_feather or not os.path.exists(self._DIR_DATA_OUTPUT + f'{prefix}num_feature.feather')):
+                    if self.USE_PARALLEL:
                         num_feature_df = pd.concat(pool.map(num_feature, tqdm(dfs, desc='num_feature'))).reset_index(
                             drop=True)
-                    num_feature_df = self.num_feature(df, num_features, lastk).reset_index(drop=True)
-                    num_feature_df.to_feather(self._DIR_DATA + f'{prefix}num_feature.feather')
+                    else:
+                        num_feature_df = self.num_feature(df, num_features, lastk).reset_index(drop=True)
+                    if self.USE_FEATHER:
+                        num_feature_df.to_feather(self._DIR_DATA_OUTPUT + f'{prefix}num_feature.feather')
+                    else:
+                        self.append_cols(num_feature_df, self._DIR_DATA_OUTPUT + f'{prefix}num_feature.csv')
 
-                if prefix in ['', 'last3_']:
-                    if False:
+                if prefix in ['', 'last3_'] and (self.regenerate_feather or  not os.path.exists(self._DIR_DATA_OUTPUT + f'{prefix}diff_feature.feather')):
+                    if self.USE_PARALLEL:
                         diff_feature_df = pd.concat(pool.map(diff_feature, tqdm(dfs, desc='diff_feature'))).reset_index(
                             drop=True)
-                    diff_feature_df = self.diff_feature(df, num_features, lastk).reset_index(drop=True)
-                    diff_feature_df.to_feather(self._DIR_DATA + f'{prefix}diff_feature.feather')
+                    else:
+                        diff_feature_df = self.diff_feature(df, num_features, lastk).reset_index(drop=True)
+                    if self.USE_FEATHER:
+                        diff_feature_df.to_feather(self._DIR_DATA_OUTPUT + f'{prefix}diff_feature.feather')
+                    else:
+                        self.append_cols(diff_feature_df, self._DIR_DATA_OUTPUT + f'{prefix}diff_feature.csv')
 
                 # for debugging turn of parallel
-                if False:
+                if self.USE_PARALLEL:
                     pool.close()
 
     def Write_log(self, logFile, text, isPrint=True):
@@ -536,7 +604,7 @@ class model_amex:
         self.Lgb_train_and_predict(train, test, lgb_config, gkf=True, aug=None, run_id='LGB_with_series_feature')
 
     def compute_score(self):
-        train_y_orig = pd.read_csv(self._DIR_DATA + self._FILE_TRAIN_LABEL)
+        train_y_orig = pd.read_csv(self._DIR_DATA_OUTPUT + self._FILE_TRAIN_LABEL)
         # merged = False
         for run_id in ['LGB_with_series_feature', 'LGB_with_manual_feature', 'LGB_with_manual_feature_and_series_oof',
                        'NN_with_series', 'NN_with_series_and_all_feature','']:
@@ -655,9 +723,9 @@ class model_amex:
         for fn in ['cat', 'num', 'diff', 'rank_num', 'last3_cat', 'last3_num', 'last3_diff', 'last6_num',
                    'ym_rank_num']:
             if len(df) == 0:
-                df.append(pd.read_feather(f'{self._DIR_DATA}/{fn}_feature.feather'))
+                df.append(pd.read_feather(f'{self._DIR_DATA_OUTPUT}/{fn}_feature.feather'))
             else:
-                df.append(pd.read_feather(f'{self._DIR_DATA}/{fn}_feature.feather').drop([self.COL_UID], axis=1))
+                df.append(pd.read_feather(f'{self._DIR_DATA_OUTPUT}/{fn}_feature.feather').drop([self.COL_UID], axis=1))
             if 'last' in fn:
                 df[-1] = df[-1].add_prefix('_'.join(fn.split('_')[:-1]) + '_')
 
@@ -665,7 +733,7 @@ class model_amex:
 
         df = pd.concat(df, axis=1)
         print(df.shape)
-        df.to_feather(f'{self._DIR_DATA}/all_feature.feather')
+        df.to_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
 
         del df
 
@@ -678,7 +746,7 @@ class model_amex:
                 df[col] /= 100
             df[col] = df[col].fillna(0)
 
-        df.to_feather(self._DIR_DATA + 'nn_series.feather')
+        df.to_feather(self._DIR_DATA_OUTPUT + 'nn_series.feather')
 
         eps = 1e-3
 
@@ -686,9 +754,9 @@ class model_amex:
         for fn in ['cat', 'num', 'diff', 'rank_num', 'last3_cat', 'last3_num', 'last3_diff', 'last6_num',
                    'ym_rank_num']:
             if len(dfs) == 0:
-                dfs.append(pd.read_feather(f'{self._DIR_DATA}/{fn}_feature.feather'))
+                dfs.append(pd.read_feather(f'{self._DIR_DATA_OUTPUT}/{fn}_feature.feather'))
             else:
-                dfs.append(pd.read_feather(f'{self._DIR_DATA}/{fn}_feature.feather').drop([self.COL_UID], axis=1))
+                dfs.append(pd.read_feather(f'{self._DIR_DATA_OUTPUT}/{fn}_feature.feather').drop([self.COL_UID], axis=1))
 
             if 'last' in fn:
                 dfs[-1] = dfs[-1].add_prefix('_'.join(fn.split('_')[:-1]) + '_')
@@ -710,13 +778,13 @@ class model_amex:
         dfs.append(tmp)
         df = pd.concat(dfs, axis=1)
 
-        df.to_feather(self._DIR_DATA + 'nn_all_feature.feather')
+        df.to_feather(self._DIR_DATA_OUTPUT + 'nn_all_feature.feather')
 
     def S5_LGB_main(self):
         root = self.args.root
         seed = self.args.seed
 
-        df = pd.read_feather(f'{self._DIR_DATA}/all_feature.feather')
+        df = pd.read_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
 
         train_y = pd.read_csv(f'{self._DIR_DATA_INPUT}/' + self._FILE_TRAIN_LABEL)
 
@@ -725,9 +793,13 @@ class model_amex:
         train_feather = train_feather.groupby(self.COL_UID).count()[self.COL_TIME]
 
         train = df[:train_feather.shape[0]]
-        train = train.merge(train_y, left_on=self.COL_UID, right_on=self.COL_UID)
         test = df[train_feather.shape[0]:].reset_index(drop=True)
         del df
+        train_y = train[[self.COL_UID]].merge(train_y[[self.COL_UID, self.COL_LABEL]], on = self.COL_UID)
+        train.insert(len(train.columns),self.COL_LABEL,train_y[self.COL_LABEL])
+        # train = train.merge(train_y, left_on=self.COL_UID, right_on=self.COL_UID)
+        del train_y
+        del train_feather
 
         print(train.shape, test.shape)
 
@@ -1107,7 +1179,7 @@ class model_amex:
     def S6_NN_main(self, first_train ):
         x = datetime.datetime.now()
         print('start: ', x)
-        df = pd.read_feather(self._DIR_DATA + 'nn_series.feather')
+        df = pd.read_feather(self._DIR_DATA_OUTPUT + 'nn_series.feather')
         y = pd.read_csv(self._DIR_DATA_INPUT + 'train_labels.csv')
 
         # todo: change this to use train_feather count
@@ -1117,7 +1189,7 @@ class model_amex:
         # df_uid = df.groupby(self.COL_UID).count()['index']
         y = y.merge(train_feather, left_on=self.COL_UID, right_index=True).drop(columns='S_2')
 
-        f = pd.read_feather(self._DIR_DATA + 'nn_all_feature.feather')
+        f = pd.read_feather(self._DIR_DATA_OUTPUT + 'nn_all_feature.feather')
         df['idx'] = df.index
         series_idx = df.groupby(self.COL_UID, sort=False).idx.agg(['min', 'max'])
         series_idx['feature_idx'] = np.arange(len(series_idx))
@@ -1175,10 +1247,10 @@ if __name__ == '__main__':
 
     if False:
         model.S2_manial_feature()
+    if False:
         model.S3_series_feature()
-    if False:
-         model.S4_feature_combined()
-    if False:
+        model.S4_feature_combined()
+    if True:
         model.S5_LGB_main()
     if True:
         model.S6_NN_main(first_train=True)
