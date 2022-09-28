@@ -31,7 +31,14 @@ class model_amex:
         # self.SIZE_TEST = 10000
         # self.SIZE_TRAIN = 1000000000
         # self.SIZE_TEST = 500000
-        self.TOTAL_SAMPLING_PCNT = 1
+        self.PROD = True
+        if not self.PROD:
+            self.TOTAL_SAMPLING_PCNT = 0.02
+            self.NUM_BATCHES_all_feature = 2
+        else:
+            self.TOTAL_SAMPLING_PCNT = 1
+            self.NUM_BATCHES_all_feature = 2
+
         self.TEST_PCNT = 0.1
 
         # folder where data are located such as train and test data
@@ -433,8 +440,15 @@ class model_amex:
 
     def Metric(self, labels, preds):
         return self.amex_metric_mod(labels, preds)
+    # def Lgb_train_and_predict(self, train, test, config, gkf=False, aug=None, output_root=None, run_id=None, batches_train = 1):
+    #
+    #     self.gb_train_and_predict_hlper(train, test, config, gkf, aug, output_root, run_id)
 
-    def Lgb_train_and_predict(self, train, test, config, gkf=False, aug=None, output_root=None, run_id=None):
+    def Lgb_train_and_predict(self, train, test, config, gkf=False, aug=None, output_root=None, run_id=None, batches_train =0):
+        def split(a, n):
+            k, m = divmod(len(a), n)
+            return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+
         if output_root is None:
             output_root = self._DIR_OUTPUT
         if not run_id:
@@ -453,8 +467,6 @@ class model_amex:
         config['lgb_params']['seed'] = config['seed']
         oof, sub = None, None
         if train is not None:
-            log = open(output_path + '/train.log', 'w', buffering=1)
-            log.write(str(config) + '\n')
             features = config['feature_name']
             params = config['lgb_params']
             rounds = config['rounds']
@@ -462,6 +474,11 @@ class model_amex:
             early_stopping_rounds = config['early_stopping_rounds']
             folds = config['folds']
             seed = config['seed']
+            # for index__, train in enumerate(np.array_split(train_entire, batches_train)):
+            log = open(output_path + '/train.log', 'w', buffering=1)
+            log.write(str(config) + '\n')
+            train = train.reset_index().drop(columns=['index'])
+            # print(index__)
             oof = train[[self.COL_UID]]
             oof[self.COL_LABEL] = 0
 
@@ -502,7 +519,7 @@ class model_amex:
                                   early_stopping_rounds=early_stopping_rounds,
                                   verbose_eval=verbose
                                   )
-                model.save_model(output_path + '/fold%s.ckpt' % fold)
+                model.save_model(output_path + '/fold%s.ckpt' % (fold+ batches_train*folds))
 
                 valid_preds = model.predict(train.loc[val_index, features], num_iteration=model.best_iteration)
                 oof.loc[val_index, self.COL_LABEL] = valid_preds
@@ -549,7 +566,7 @@ class model_amex:
         if test is not None:
             sub = test[[self.COL_UID]]
             sub['prediction'] = 0
-            for fold in range(folds):
+            for fold in range(folds*(batches_train+1)):
                 model = lgb.Booster(model_file=output_path + '/fold%s.ckpt' % fold)
                 test_preds = model.predict(test[features], num_iteration=model.best_iteration)
                 sub['prediction'] += (test_preds / folds)
@@ -604,7 +621,7 @@ class model_amex:
         self.Lgb_train_and_predict(train, test, lgb_config, gkf=True, aug=None, run_id='LGB_with_series_feature')
 
     def compute_score(self):
-        train_y_orig = pd.read_csv(self._DIR_DATA_OUTPUT + self._FILE_TRAIN_LABEL)
+        train_y_orig = pd.read_csv(self._DIR_DATA_INPUT + self._FILE_TRAIN_LABEL)
         # merged = False
         for run_id in ['LGB_with_series_feature', 'LGB_with_manual_feature', 'LGB_with_manual_feature_and_series_oof',
                        'NN_with_series', 'NN_with_series_and_all_feature','']:
@@ -733,8 +750,28 @@ class model_amex:
 
         df = pd.concat(df, axis=1)
         print(df.shape)
-        df.to_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
+        # df.to_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
+        # df.to_csv(f'{self._DIR_DATA_OUTPUT}/all_feature.csv.zip', index=False, compression='zip')
+        if False:
+            df_uids = df[[self.COL_UID,df.columns[1]]].groupby(self.COL_UID).count()[[df.columns[1]]].reset_index()
+            for idx_, uids in enumerate(np.array_split(df_uids, self.NUM_BATCHES_all_feature)):
+                df.merge(uids[[self.COL_UID]], on =self.COL_UID).to_feather(f'{self._DIR_DATA_OUTPUT}/all_feature{idx_}.feather')
+            del df_uids
 
+        train_feather = pd.read_feather(self.get_path_train())
+        # train = df[:train_feather.shape[0]]
+
+        df_uids = tmp1[[tmp1.columns[0]]].reset_index()
+        for idx, uids in enumerate(np.array_split(df_uids, self.NUM_BATCHES_all_feature)):
+            df.merge(uids[[self.COL_UID]], on=self.COL_UID).to_feather(
+                f'{self._DIR_DATA_OUTPUT}/all_feature_train{idx}.feather')
+        del  df_uids
+
+        df_uids = tmp2[[tmp2.columns[0]]].reset_index()
+        df.merge(df_uids[[self.COL_UID]], on=self.COL_UID).to_feather(
+            f'{self._DIR_DATA_OUTPUT}/all_feature_test.feather')
+
+        del  df_uids
         del df
 
         df = pd.read_feather(self.get_path_train()).append(
@@ -781,27 +818,60 @@ class model_amex:
         df.to_feather(self._DIR_DATA_OUTPUT + 'nn_all_feature.feather')
 
     def S5_LGB_main(self):
+        for batch_all_feature in range(self.NUM_BATCHES_all_feature):
+            self.S5_LGB_main_helper(batch_all_feature, batch_all_feature+ 1==self.NUM_BATCHES_all_feature)
+    #only used once
+    if False:
+        def split_all_feature(self):
+            df = pd.read_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
+            if False:
+                train_feather = pd.read_feather(self.get_path_train())
+                # train = df[:train_feather.shape[0]]
+
+                df_uids = train_feather[[self.COL_UID, train_feather.columns[2]]].groupby(self.COL_UID).count()[[train_feather.columns[2]]].reset_index()
+                for idx, uids in enumerate(np.array_split(df_uids, self.NUM_BATCHES_all_feature)):
+                    df.merge(uids[[self.COL_UID]], on=self.COL_UID).to_feather(
+                        f'{self._DIR_DATA_OUTPUT}/all_feature_train{idx}.feather')
+                del train_feather, df_uids
+            test_feather = pd.read_feather(self.get_path_test())
+            df_uids = test_feather[[self.COL_UID, test_feather.columns[2]]].groupby(self.COL_UID).count()[[test_feather.columns[2]]].reset_index()
+            df.merge(df_uids[[self.COL_UID]], on=self.COL_UID).to_feather(
+                f'{self._DIR_DATA_OUTPUT}/all_feature_test.feather')
+
+            return
+    def S5_LGB_main_helper(self, batch_all_feature, do_test):
         root = self.args.root
         seed = self.args.seed
 
-        df = pd.read_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
+        train = pd.read_feather(f'{self._DIR_DATA_OUTPUT}/all_feature_train{batch_all_feature}.feather')
 
+        # df.to_csv(f'{self._DIR_DATA_OUTPUT}/all_feature.csv.zip', index=False, compression='zip')
+        if False:
+            df = pd.read_feather(f'{self._DIR_DATA_OUTPUT}/all_feature.feather')
+            train_feather = pd.read_feather(self.get_path_train())
+
+            df_uids = df[[self.COL_UID,df.columns[1]]].groupby(self.COL_UID).count()[[df.columns[1]]].reset_index()
+            for idx, uids in enumerate(np.array_split(df_uids, self.NUM_BATCHES_all_feature)):
+                df.merge(uids[[self.COL_UID]], on =self.COL_UID).to_feather(f'{self._DIR_DATA_OUTPUT}/all_feature{idx}.feather')
+
+            return
         train_y = pd.read_csv(f'{self._DIR_DATA_INPUT}/' + self._FILE_TRAIN_LABEL)
 
         # todo: change this to use train_feather count
-        train_feather = pd.read_feather(self.get_path_train())
-        train_feather = train_feather.groupby(self.COL_UID).count()[self.COL_TIME]
+        # train_feather = pd.read_feather(self.get_path_train())
+        # train_feather = train_feather.groupby(self.COL_UID).count()[self.COL_TIME]
 
-        train = df[:train_feather.shape[0]]
-        test = df[train_feather.shape[0]:].reset_index(drop=True)
-        del df
+        # train = df[:train_feather.shape[0]]
+        if do_test:
+            test = pd.read_feather(f'{self._DIR_DATA_OUTPUT}/all_feature_test.feather')
+        # del df
         train_y = train[[self.COL_UID]].merge(train_y[[self.COL_UID, self.COL_LABEL]], on = self.COL_UID)
         train.insert(len(train.columns),self.COL_LABEL,train_y[self.COL_LABEL])
         # train = train.merge(train_y, left_on=self.COL_UID, right_on=self.COL_UID)
         del train_y
-        del train_feather
+        # del train_feather
 
-        print(train.shape, test.shape)
+        # print(train.shape, test.shape)
 
         lgb_config = {
             'lgb_params': {
@@ -833,6 +903,24 @@ class model_amex:
             'seed': seed
         }
 
+        # PROD= True
+        if not self.PROD:
+            #set to 5 in prod
+            folds = 2
+            # set to 4500 in prod
+            rounds = 45
+            #set to 100 in prod
+            early_stopping_rounds = 10
+        else:
+            #set to 5 in prod
+            folds = 5
+            # set to 4500 in prod
+            rounds = 4500
+            #set to 100 in prod
+            early_stopping_rounds = 100
+
+
+
         lgb_config = {
             'lgb_params': {
                 'objective': 'binary',
@@ -857,19 +945,20 @@ class model_amex:
             },
             'feature_name': [col for col in train.columns if col not in [self.COL_UID, self.COL_LABEL,
                                                                          self.COL_TIME] and 'skew' not in col and 'kurt' not in col and 'sub_mean' not in col and 'div_mean' not in col],
-            'rounds': 4500,
-            'early_stopping_rounds': 100,
+            'rounds': rounds,
+            'early_stopping_rounds': early_stopping_rounds,
             'verbose_eval': 50,
-            'folds': 5,
+            'folds': folds,
             'seed': seed
         }
         lgb_config['feature_name'] = [col for col in train.columns if
                                       col not in [self.COL_UID, self.COL_LABEL, 'S_2'] and 'target' not in col]
-        self.Lgb_train_and_predict(train, test, lgb_config, aug=None, run_id='LGB_with_manual_feature')
+        # self.Lgb_train_and_predict(train, test, lgb_config, aug=None, run_id='LGB_with_manual_feature', batches_train=round(self.TOTAL_SAMPLING_PCNT/0.5))
+        self.Lgb_train_and_predict(train, test if do_test else None, lgb_config, aug=None, run_id='LGB_with_manual_feature', batches_train=batch_all_feature)
 
         lgb_config['feature_name'] = [col for col in train.columns if
                                       col not in [self.COL_UID, self.COL_LABEL, self.COL_TIME]]
-        self.Lgb_train_and_predict(train, test, lgb_config, aug=None, run_id='LGB_with_manual_feature_and_series_oof')
+        self.Lgb_train_and_predict(train, test if do_test else None, lgb_config, aug=None, run_id='LGB_with_manual_feature_and_series_oof', batches_train=batch_all_feature)
 
     def use_cuda(self):
         return True
@@ -1250,9 +1339,11 @@ if __name__ == '__main__':
     if False:
         model.S3_series_feature()
         model.S4_feature_combined()
-    if True:
+        model.split_all_feature()
+    if False:
         model.S5_LGB_main()
     if True:
         model.S6_NN_main(first_train=True)
         model.S7_ensemble()
+    if True:
         model.compute_score()
