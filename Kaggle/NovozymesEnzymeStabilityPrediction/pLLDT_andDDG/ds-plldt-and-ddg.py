@@ -6,7 +6,7 @@
 # In[ ]:
 
 
-get_ipython().system('pip install biopandas')
+# get_ipython().system('pip install biopandas')
 
 
 # Based on https://www.kaggle.com/code/hengck23/lb0-335-deepdgg-server-benchmark and https://www.kaggle.com/code/lucasmorin/nesp-changes-eda-and-baseline
@@ -35,10 +35,11 @@ sigmoid_norm_factor = 3
 
 
 class paths:
-    TRAIN = "/kaggle/input/novozymes-enzyme-stability-prediction/train.csv"
-    TEST = "/kaggle/input/novozymes-enzyme-stability-prediction/test.csv"
-    SUBMISSION = "/kaggle/input/novozymes-enzyme-stability-prediction/sample_submission.csv"
-    PDB_FILE = "/kaggle/input/novozymes-enzyme-stability-prediction/wildtype_structure_prediction_af2.pdb"
+    _DIR_DATA_INPUT = r'../data/'
+    TRAIN = _DIR_DATA_INPUT + "train.csv"
+    TEST = _DIR_DATA_INPUT + "test.csv"
+    SUBMISSION = _DIR_DATA_INPUT + "sample_submission.csv"
+    PDB_FILE = _DIR_DATA_INPUT + "wildtype_structure_prediction_af2.pdb"
 
 
 # In[ ]:

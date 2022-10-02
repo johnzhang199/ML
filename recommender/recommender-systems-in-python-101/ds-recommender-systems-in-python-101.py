@@ -29,10 +29,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse.linalg import svds
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
-
+DO_POPULARITY = False
 # # Loading data: CI&T Deskdrop dataset
-
+DO_CONTENT = False
 # In this section, we load the [Deskdrop dataset](https://www.kaggle.com/gspmoreira/articles-sharing-reading-from-cit-deskdrop), which contains a real sample of 12 months logs (Mar. 2016 - Feb. 2017) from CI&T's Internal Communication platform (DeskDrop). It contains about 73k logged users interactions on more than 3k public articles shared in the platform.
 # It is composed of two CSV files:  
 # - **shared_articles.csv**
@@ -55,7 +57,7 @@ import matplotlib.pyplot as plt
 # In[ ]:
 
 
-articles_df = pd.read_csv('../input/shared_articles.csv')
+articles_df = pd.read_csv(r'.\input\shared_articles.csv')
 articles_df = articles_df[articles_df['eventType'] == 'CONTENT SHARED']
 articles_df.head(5)
 
@@ -74,7 +76,7 @@ articles_df.head(5)
 # In[ ]:
 
 
-interactions_df = pd.read_csv('../input/users_interactions.csv')
+interactions_df = pd.read_csv('input/users_interactions.csv')
 interactions_df.head(10)
 
 
@@ -333,11 +335,11 @@ popularity_model = PopularityRecommender(item_popularity_df, articles_df)
 
 # In[ ]:
 
-
-print('Evaluating Popularity recommendation model...')
-pop_global_metrics, pop_detailed_results_df = model_evaluator.evaluate_model(popularity_model)
-print('\nGlobal metrics:\n%s' % pop_global_metrics)
-pop_detailed_results_df.head(10)
+if DO_POPULARITY:
+    print('Evaluating Popularity recommendation model...')
+    pop_global_metrics, pop_detailed_results_df = model_evaluator.evaluate_model(popularity_model)
+    print('\nGlobal metrics:\n%s' % pop_global_metrics)
+    pop_detailed_results_df.head(10)
 
 
 # # Content-Based Filtering model
@@ -470,11 +472,11 @@ content_based_recommender_model = ContentBasedRecommender(articles_df)
 
 # In[ ]:
 
-
-print('Evaluating Content-Based Filtering model...')
-cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(content_based_recommender_model)
-print('\nGlobal metrics:\n%s' % cb_global_metrics)
-cb_detailed_results_df.head(10)
+if DO_CONTENT:
+    print('Evaluating Content-Based Filtering model...')
+    cb_global_metrics, cb_detailed_results_df = model_evaluator.evaluate_model(content_based_recommender_model)
+    print('\nGlobal metrics:\n%s' % cb_global_metrics)
+    cb_detailed_results_df.head(10)
 
 
 # # Collaborative Filtering model
@@ -508,7 +510,7 @@ users_items_pivot_matrix_df.head(10)
 # In[ ]:
 
 
-users_items_pivot_matrix = users_items_pivot_matrix_df.as_matrix()
+users_items_pivot_matrix = users_items_pivot_matrix_df.values#as_matrix()
 users_items_pivot_matrix[:10]
 
 
@@ -562,7 +564,7 @@ sigma.shape
 
 all_user_predicted_ratings = np.dot(np.dot(U, sigma), Vt) 
 all_user_predicted_ratings
-
+all_user_predicted_ratings.shape
 
 # In[ ]:
 
