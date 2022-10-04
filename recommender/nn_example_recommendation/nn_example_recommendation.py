@@ -117,27 +117,29 @@ dtf_products.head()
 
 # In[9]:
 
-
-fig, ax = plt.subplots(figsize=(20,5))
-sns.heatmap(dtf_products==0, vmin=0, vmax=1, cbar=False, ax=ax).set_title("Products x Features")
-plt.show()
+DO_PLOT = False
+if DO_PLOT:
+    fig, ax = plt.subplots(figsize=(20,5))
+    sns.heatmap(dtf_products==0, vmin=0, vmax=1, cbar=False, ax=ax).set_title("Products x Features")
+    plt.show()
 
 
 # ###### Users
 
 # In[10]:
 
-
-dtf_users.groupby("user").count()["product"].sort_values(ascending=False).plot(
+if DO_PLOT:
+    dtf_users.groupby("user").count()["product"].sort_values(ascending=False).plot(
     kind="bar", color="green", title="Y by user", figsize=(20,5)).grid(axis='y')
 
 
 # In[11]:
 
+if DO_PLOT:
 
-dtf_users["y"].value_counts().sort_index().plot(kind="bar", color="green", title="Y disribution", 
-                                                figsize=(20,5)).grid(axis='y')
-plt.show()
+    dtf_users["y"].value_counts().sort_index().plot(kind="bar", color="green", title="Y disribution",
+                                                    figsize=(20,5)).grid(axis='y')
+    plt.show()
 
 
 # In[12]:
@@ -153,29 +155,31 @@ dtf_users
 
 
 # In[13]:
+if DO_PLOT:
 
 
-fig, ax = plt.subplots(figsize=(20,5))
-sns.heatmap(dtf_users.isnull(), vmin=0, vmax=1, cbar=False, ax=ax).set_title("Users x Products")
-plt.show()
+    fig, ax = plt.subplots(figsize=(20,5))
+    sns.heatmap(dtf_users.isnull(), vmin=0, vmax=1, cbar=False, ax=ax).set_title("Users x Products")
+    plt.show()
 
 
 # ###### Context
 
 # In[14]:
 
+if DO_PLOT:
 
-dtf_context["weekend"].value_counts().plot(kind="barh", color="green", title="Weekend (count)", 
-                                         figsize=(5,3)).grid(axis='x')
-plt.show()
+    dtf_context["weekend"].value_counts().plot(kind="barh", color="green", title="Weekend (count)",
+                                             figsize=(5,3)).grid(axis='x')
+    plt.show()
 
 
 # In[15]:
 
 
-dtf_context["daytime"].value_counts().plot(kind="barh", color="green", title="Daytime (count)", 
-                                         figsize=(5,3)).grid(axis='x')
-plt.show()
+    dtf_context["daytime"].value_counts().plot(kind="barh", color="green", title="Daytime (count)",
+                                             figsize=(5,3)).grid(axis='x')
+    plt.show()
 
 
 # ### 2 - Preprocessing
@@ -258,7 +262,7 @@ print("Users", usr.shape, " x  Products", prd.shape)
 
 # Numpy
 import numpy as np
-
+# using features of the movie (genre, whether it is before 2000 etc) to predict ranking. content based.
 ## usr_ft(users,fatures) = usr(users,products) x prd(products,features)
 usr_ft = np.dot(usr, prd)
 ## normalize
@@ -742,8 +746,8 @@ test
 y_test = test["y"]
 predicted = test["yhat"]
 
-print("Mean Absolute Error (Σ|y-pred|/n):", "{:,.0f}".format(metrics.mean_absolute_error(y_test, predicted)))
-print("Mean Absolute Perc Error (Σ(|y-pred|/y)/n):", str(round(np.mean(np.abs((y_test-predicted)/predicted)), 2))+"%")
+print("Mean Absolute Error (Σ|y-pred|/n):", "{:,.2f}".format(metrics.mean_absolute_error(y_test, predicted)))
+print("Mean Absolute Perc Error (Σ(|y-pred|/y)/n):", str(round(np.mean(np.abs((y_test-predicted)/predicted)), 2)))
 
 
 # In[64]:
